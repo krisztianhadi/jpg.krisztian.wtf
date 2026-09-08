@@ -1,2 +1,17 @@
 .*
 !/.gitignore
+!/.github/
+!/.github/workflows/
+!/.github/workflows/pages.yml
+
+# original photos stay local - only the optimized dist/ site is committed
+/photos/
+
+# local GitHub token (never commit)
+/.github-token
+/.git-credentials
+
+node_modules/
+
+# misc
+.DS_Store

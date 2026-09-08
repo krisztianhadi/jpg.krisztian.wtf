@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="A photo wall you can pan and zoom.">
+<title>JPG BY KRISZTIAN</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2326231e'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%23e23c30'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --wall: #cfc8ba;                   /* one flat color everywhere */
+    --chrome: rgba(25, 22, 18, .62);   /* header/hint/controls glass */
+    --ink: #f2eee4;
+    --ink-dim: rgba(242, 238, 228, .55);
+    --note: #4a443a;                   /* text sitting directly on the wall */
+    --mat: #fbfaf6;                    /* frame mat */
+    --cap: #776f63;                    /* caption text on the mat */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --wall: #26231e;
+      --chrome: rgba(12, 11, 9, .66);
+      --ink: #e8e4d8;
+      --ink-dim: rgba(232, 228, 216, .5);
+      --note: #d5cfc2;
+      --mat: #c7bfab;                  /* warm off-white, not pure white */
+      --cap: #4c4637;
+    }
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:var(--wall);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color:var(--ink);
+    -webkit-user-select:none; user-select:none;
+    overscroll-behavior:none;
+  }
+
+  #stage {
+    position:fixed; inset:0;
+    touch-action:none;               /* we handle pan/zoom, not the browser */
+    cursor:grab;
+    /* vignette baked into the stage background: the scene falls off into
+       shadow toward the viewport edges, so it feels like the wall simply
+       ends - nothing continues past it. Viewport-anchored (stage is never
+       transformed). */
+    background-color: var(--wall);
+    background-image: radial-gradient(125% 125% at 50% 50%,
+      rgba(0,0,0,0) 58%, rgba(0,0,0,.32) 100%);
+  }
+  #stage.dragging { cursor:grabbing; }
+
+  #world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+
+  #wall {
+    position:relative;
+    width:4680px; height:3974px;
+    /* transparent: the stage background (with its vignette) shows through
+       everywhere, frames float directly on it */
+    background: transparent;
+  }
+
+  .item { position:absolute; left:0; top:0; will-change:transform; }
+  .frame {
+    background:var(--mat);
+    padding:20px;
+    border-radius:2px;                  /* soft corners on the mat */
+    box-shadow: 0 2px 3px rgba(0,0,0,.16), 0 9px 20px rgba(0,0,0,.20);
+  }
+  .frame img {
+    display:block;
+    width:100%; height:auto;          /* keep exact aspect, never crop */
+    background:#000;
+    border-radius:2px;                /* soft corners on the photo itself */
+    -webkit-user-drag:none; user-drag:none;
+  }
+  .frame .cap {
+    width:100%; height:72px;
+    padding-top:22px;   /* air between photo and text */
+    color:var(--cap);
+    overflow:hidden;
+    /* 22px air above + 22px (2px strip + 20px mat) below centers the text */
+  }
+  .frame .cap-line {
+    height:16px; line-height:16px;   /* two 16px lines fit the strip */
+    font-size:11px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .frame .cap-line:empty { display:none; }
+  .item.off { display:none; }
+
+  /* light mats cast a deeper shadow on the dark wall */
+  @media (prefers-color-scheme: dark) {
+    .frame { box-shadow: 0 2px 4px rgba(0,0,0,.45), 0 12px 28px rgba(0,0,0,.5); }
+  }
+
+  /* chrome: header + controls */
+  header {
+    position:fixed; top:0; left:0; right:0;
+    display:flex; align-items:baseline; gap:14px;
+    padding:14px 18px; pointer-events:none;
+    background:linear-gradient(180deg, var(--chrome), rgba(0,0,0,0));
+  }
+  header h1 { font-size:13px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+  header .count { font-size:11px; color:var(--ink-dim); }
+
+  #hint {
+    position:fixed; left:50%; bottom:64px; transform:translateX(-50%);
+    font-size:11px; color:var(--ink-dim); text-align:center; pointer-events:none;
+    background:var(--chrome); padding:8px 14px; border-radius:6px;
+    opacity:1; transition:opacity 1.2s ease 6s;
+  }
+  #hint.gone { opacity:0; }
+
+  #controls {
+    position:fixed; right:14px; bottom:14px;
+    display:flex; gap:6px; align-items:center;
+    background:var(--chrome); border:1px solid rgba(255,255,255,.12);
+    padding:6px; border-radius:10px;
+    backdrop-filter:blur(4px);
+  }
+  #controls button {
+    width:34px; height:34px; border:0; border-radius:7px;
+    background:transparent; color:var(--ink);
+    font:inherit; font-size:17px; line-height:1; cursor:pointer;
+  }
+  #controls button:hover { background:rgba(255,255,255,.14); }
+  #controls button:active { background:rgba(255,255,255,.24); }
+  #controls .sep { width:1px; height:20px; background:rgba(255,255,255,.18); margin:0 2px; }
+  #zoomLbl { min-width:38px; text-align:center; font-size:11px; color:var(--ink-dim); }
+
+  .empty-note {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    text-align:center; padding:0 24px;
+  }
+  .empty-note p { max-width:420px; font-size:13px; line-height:1.7; color:var(--note); }
+  .empty-note code {
+    color:var(--note); background:rgba(127,127,127,.2); padding:1px 6px; border-radius:4px;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="world"><div id="wall"></div></div>
+</div>
+
+<header>
+  <h1>JPG BY KRISZTIAN</h1>
+  <span class="count">38 photos</span>
+</header>
+
+
+<div id="hint">drag to move - scroll / pinch / +/- to zoom - arrows pan</div>
+
+<div id="controls">
+  <button id="zoomOut" aria-label="Zoom out">&minus;</button>
+  <button id="zoomIn" aria-label="Zoom in">+</button>
+  <span id="zoomLbl"></span>
+  <span class="sep"></span>
+  <button id="fitBtn" aria-label="Fit whole wall to view">&copy;</button>
+</div>
+
+<script>
+"use strict";
+
+/* Photo wall viewport engine: pan by drag, zoom by wheel/pinch/buttons.
+   The layout is baked into POS below, so the browser never has to wait
+   for image dimensions - every frame is placed instantly. */
+
+var POS = [{"x":3780,"y":624,"pw":600,"ph":400,"file":"umbrella-vs-time.jpg","w":6240,"h":48998806,"base":"umbrella-vs-time","title":"UMBRELLA-VS-TIME.JPG","spec":"23mm f/2 1/420s ISO 640","cam":"FUJIFILM X100V"},{"x":1668,"y":260,"pw":248,"ph":372,"file":"red-light-in-zandaam.jpg","w":3487,"h":107535351,"base":"red-light-in-zandaam","title":"RED-LIGHT-IN-ZANDAAM.JPG","spec":"23mm f/2 1/60s ISO 5000","cam":"FUJIFILM X100V"},{"x":2020,"y":260,"pw":248,"ph":372,"file":"caffee-reflection.jpg","w":4160,"h":241812758,"base":"caffee-reflection","title":"CAFFEE-REFLECTION.JPG","spec":"23mm f/2 1/210s ISO 640","cam":"FUJIFILM X100V"},{"x":964,"y":321,"pw":600,"ph":400,"file":"delicatessen.jpg","w":6240,"h":263261822,"base":"delicatessen","title":"DELICATESSEN.JPG","spec":"23mm f/2 1/60s ISO 1250","cam":"FUJIFILM X100V"},{"x":260,"y":590,"pw":248,"ph":372,"file":"bread-and-co.jpg","w":4160,"h":363422359,"base":"bread-and-co","title":"BREAD-AND-CO.JPG","spec":"23mm f/2 1/60s ISO 1250","cam":"FUJIFILM X100V"},{"x":612,"y":590,"pw":248,"ph":372,"file":"dome.jpg","w":4160,"h":424538467,"base":"dome","title":"DOME.JPG","spec":"23mm f/2 1/1000s ISO 640","cam":"FUJIFILM X100V"},{"x":2372,"y":281,"pw":248,"ph":372,"file":"bus-glass-reflection-aniko.jpg","w":4160,"h":437334754,"base":"bus-glass-reflection-aniko","title":"BUS-GLASS-REFLECTION-ANIKO.JPG","spec":"23mm f/2 1/60s ISO 3200","cam":"FUJIFILM X100V"},{"x":2724,"y":281,"pw":248,"ph":372,"file":"buzzing.jpg","w":4160,"h":462012545,"base":"buzzing","title":"BUZZING.JPG","spec":"23mm f/2.8 1/1600s ISO 640","cam":"FUJIFILM X100V"},{"x":3076,"y":533,"pw":600,"ph":1066,"file":"double-exposure-study-aniko-palm-leaf-x.jpg","w":3512,"h":482336145,"base":"double-exposure-study-aniko-palm-leaf","title":"DOUBLE-EXPOSURE-STUDY-ANIKO-PALM-LEAF.JPG","spec":"23mm f/2 1/60s ISO 3200","cam":"FUJIFILM X100V"},{"x":1668,"y":808,"pw":600,"ph":400,"file":"random-plant.jpg","w":6240,"h":611837603,"base":"random-plant","title":"RANDOM-PLANT.JPG","spec":"23mm f/2 1/60s ISO 640","cam":"FUJIFILM X100V"},{"x":260,"y":1138,"pw":269,"ph":403,"file":"say-cheese.jpg","w":4160,"h":655502899,"base":"say-cheese","title":"SAY-CHEESE.JPG","spec":"23mm f/2 1/60s ISO 1600","cam":"FUJIFILM X100V"},{"x":633,"y":1138,"pw":227,"ph":403,"file":"double-exposure-study-buffalo.jpg","w":3512,"h":896017499,"base":"double-exposure-study-buffalo","title":"DOUBLE-EXPOSURE-STUDY-BUFFALO.JPG","spec":"23mm f/2 1/125s ISO 320","cam":"FUJIFILM X100V"},{"x":2372,"y":829,"pw":600,"ph":400,"file":"reflections-us.jpg","w":6240,"h":1300278737,"base":"reflections-us","title":"REFLECTIONS-US.JPG","spec":"23mm f/2 1/150s ISO 640","cam":"FUJIFILM X100V"},{"x":3780,"y":1200,"pw":600,"ph":400,"file":"fort-greco-coastline.jpg","w":6240,"h":1356711703,"base":"fort-greco-coastline","title":"FORT-GRECO-COASTLINE.JPG","spec":"23mm f/2 1/1000s ISO 640","cam":"FUJIFILM X100V"},{"x":964,"y":897,"pw":248,"ph":372,"file":"laci-the-cat.jpg","w":4160,"h":1567758412,"base":"laci-the-cat","title":"LACI-THE-CAT.JPG","spec":"23mm f/2 1/60s ISO 500","cam":"FUJIFILM X100V"},{"x":1668,"y":1384,"pw":600,"ph":400,"file":"seagulls.jpg","w":6240,"h":1821132188,"base":"seagulls","title":"SEAGULLS.JPG","spec":"23mm f/2 1/1700s ISO 640","cam":"FUJIFILM X100V"},{"x":1316,"y":897,"pw":248,"ph":372,"file":"red-moped.jpg","w":3730,"h":1830125881,"base":"red-moped","title":"RED-MOPED.JPG","spec":"23mm f/2 1/60s ISO 2500","cam":"FUJIFILM X100V"},{"x":964,"y":1445,"pw":248,"ph":372,"file":"reflections.jpg","w":4160,"h":2074777948,"base":"reflections","title":"REFLECTIONS.JPG","spec":"23mm f/2 1/52s ISO 3200","cam":"FUJIFILM X100V"},{"x":1316,"y":1445,"pw":248,"ph":372,"file":"rock-jumpers.jpg","w":3330,"h":2274825908,"base":"rock-jumpers","title":"ROCK-JUMPERS.JPG","spec":"23mm f/2 1/1800s ISO 640","cam":"FUJIFILM X100V"},{"x":2372,"y":1405,"pw":600,"ph":1000,"file":"double-exposure-study-aniko-lotus-x.jpg","w":3512,"h":2306195105,"base":"double-exposure-study-aniko-lotus","title":"DOUBLE-EXPOSURE-STUDY-ANIKO-LOTUS.JPG","spec":"23mm f/2 1/150s ISO 320","cam":"FUJIFILM X100V"},{"x":260,"y":1717,"pw":227,"ph":403,"file":"laci-the-cat-behind-the-courtain.jpg","w":3512,"h":2489164289,"base":"laci-the-cat-behind-the-courtain","title":"LACI-THE-CAT-BEHIND-THE-COURTAIN.JPG","spec":"23mm f/2 1/60s ISO 500","cam":"FUJIFILM X100V"},{"x":3780,"y":1776,"pw":600,"ph":338,"file":"family-portrait.jpg","w":6240,"h":2516682474,"base":"family-portrait","title":"FAMILY-PORTRAIT.JPG","spec":"23mm f/2 1/60s ISO 1600","cam":"FUJIFILM X100V"},{"x":3076,"y":1775,"pw":600,"ph":400,"file":"lonely-cow-in-goa.jpg","w":4110,"h":2535563109,"base":"lonely-cow-in-goa","title":"LONELY-COW-IN-GOA.JPG","spec":"23mm f/2 1/45s ISO 6400","cam":"FUJIFILM X100V"},{"x":591,"y":1717,"pw":269,"ph":403,"file":"gang-box.jpg","w":3816,"h":2684938563,"base":"gang-box","title":"GANG-BOX.JPG","spec":"23mm f/2 1/220s ISO 640","cam":"FUJIFILM X100V"},{"x":3780,"y":2290,"pw":600,"ph":400,"file":"pre-owned-luxury.jpg","w":6240,"h":2840469869,"base":"pre-owned-luxury","title":"PRE-OWNED-LUXURY.JPG","spec":"23mm f/2 1/60s ISO 1600","cam":"FUJIFILM X100V"},{"x":964,"y":1993,"pw":248,"ph":372,"file":"pizza-place.jpg","w":3260,"h":2846211774,"base":"pizza-place","title":"PIZZA-PLACE.JPG","spec":"23mm f/2 1/70s ISO 640","cam":"FUJIFILM X100V"},{"x":1316,"y":1993,"pw":248,"ph":372,"file":"pinecones.jpg","w":4160,"h":3009416284,"base":"pinecones","title":"PINECONES.JPG","spec":"23mm f/2 1/1700s ISO 640","cam":"FUJIFILM X100V"},{"x":1668,"y":1960,"pw":600,"ph":400,"file":"spikey-plant.jpg","w":6240,"h":3039245349,"base":"spikey-plant","title":"SPIKEY-PLANT.JPG","spec":"23mm f/2 1/350s ISO 640","cam":"FUJIFILM X100V"},{"x":260,"y":2296,"pw":600,"ph":400,"file":"dry-roots.jpg","w":6240,"h":3088847407,"base":"dry-roots","title":"DRY-ROOTS.JPG","spec":"23mm f/2 1/30s ISO 3200","cam":"FUJIFILM X100V"},{"x":3076,"y":2351,"pw":269,"ph":403,"file":"fog-in-zandaam.jpg","w":4160,"h":3288640797,"base":"fog-in-zandaam","title":"FOG-IN-ZANDAAM.JPG","spec":"23mm f/2 1/60s ISO 2500","cam":"FUJIFILM X100V"},{"x":964,"y":2541,"pw":600,"ph":1000,"file":"double-exposure-study-aniko-glass-door-x.jpg","w":3512,"h":3294203177,"base":"double-exposure-study-aniko-glass-door","title":"DOUBLE-EXPOSURE-STUDY-ANIKO-GLASS-DOOR.JPG","spec":"23mm f/2 1/60s ISO 500","cam":"FUJIFILM X100V"},{"x":3449,"y":2351,"pw":227,"ph":403,"file":"double-exposure-study-self-portait.jpg","w":3512,"h":3506902068,"base":"double-exposure-study-self-portait","title":"DOUBLE-EXPOSURE-STUDY-SELF-PORTAIT.JPG","spec":"23mm f/2 1/680s ISO 320","cam":"FUJIFILM X100V"},{"x":3780,"y":2866,"pw":248,"ph":372,"file":"more-cheese.jpg","w":4160,"h":3657974963,"base":"more-cheese","title":"MORE-CHEESE.JPG","spec":"23mm f/2 1/60s ISO 1000","cam":"FUJIFILM X100V"},{"x":1668,"y":2536,"pw":600,"ph":1066,"file":"double-exposure-study-aniko-indoors-x.jpg","w":3512,"h":3769708178,"base":"double-exposure-study-aniko-indoors","title":"DOUBLE-EXPOSURE-STUDY-ANIKO-INDOORS.JPG","spec":"23mm f/2 1/60s ISO 2500","cam":"FUJIFILM X100V"},{"x":260,"y":2872,"pw":600,"ph":400,"file":"cypriot-foodtruck.jpg","w":5862,"h":3814971082,"base":"cypriot-foodtruck","title":"CYPRIOT-FOODTRUCK.JPG","spec":"23mm f/2 1/60s ISO 1000","cam":"FUJIFILM X100V"},{"x":4132,"y":2866,"pw":248,"ph":372,"file":"green-lines.jpg","w":4160,"h":3899223063,"base":"green-lines","title":"GREEN-LINES.JPG","spec":"23mm f/2 1/900s ISO 640","cam":"FUJIFILM X100V"},{"x":2372,"y":2581,"pw":600,"ph":1000,"file":"double-exposure-study-aniko-branches.jpg","w":2223,"h":3935923559,"base":"double-exposure-study-aniko-branches","title":"DOUBLE-EXPOSURE-STUDY-ANIKO-BRANCHES.JPG","spec":"23mm f/2 1/420s ISO 320","cam":"FUJIFILM X100V"},{"x":3076,"y":2930,"pw":600,"ph":400,"file":"floating-manequin.jpg","w":5480,"h":4145236073,"base":"floating-manequin","title":"FLOATING-MANEQUIN.JPG","spec":"23mm f/2 1/60s ISO 1600","cam":"FUJIFILM X100V"}];
+var MAX_SCALE = 5;
+// vertical world window shown on load, independent of wall size
+var OPEN_WORLD = 1500;
+
+var stage = document.getElementById('stage');
+var world = document.getElementById('world');
+var wall = document.getElementById('wall');
+var hint = document.getElementById('hint');
+var zoomLbl = document.getElementById('zoomLbl');
+
+var MAT = 20;
+var CAP_H = 72;
+var items = [];
+for (var i = 0; i < POS.length; i++) {
+  var d = POS[i];
+  var el = document.createElement('div');
+  el.className = 'item';
+  el.style.transform = 'translate(' + d.x + 'px,' + d.y + 'px)';
+
+  var frame = document.createElement('div');
+  frame.className = 'frame';
+  frame.style.width = (d.pw + 2 * MAT) + 'px';
+  // height auto: image (d.ph) + caption strip (CAP_H)
+
+  var img = document.createElement('img');
+  img.src = 'photos/' + d.file;
+  img.alt = d.base.replace(/-/g, ' '); // readable, not a copy of the frame text
+  img.width = d.w;
+  img.height = d.h;
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.draggable = false;
+  frame.appendChild(img);
+
+  var cap = document.createElement('div');
+  cap.className = 'cap';
+  var lines = [d.title, d.spec, d.cam];
+  for (var k = 0; k < lines.length; k++) {
+    var cl = document.createElement('div');
+    cl.className = 'cap-line';
+    cl.textContent = lines[k];
+    if (lines[k]) cl.title = lines[k];
+    cap.appendChild(cl);
+  }
+  frame.appendChild(cap);
+  el.appendChild(frame);
+  wall.appendChild(el);
+  items.push({ el: el, x: d.x, y: d.y, w: d.pw + 2 * MAT, h: d.ph + CAP_H + 2 * MAT });
+}
+
+var wallW = 4680, wallH = 3974;
+
+// view state: screen = world * scale + (tx, ty)
+var tx = 0, ty = 0, scale = 1;
+
+function setTransform() {
+  world.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  if (zoomLbl) zoomLbl.textContent = Math.round(scale * 100) + '%';
+}
+
+function fitScale() {
+  var vw = stage.clientWidth, vh = stage.clientHeight;
+  return Math.min((vw - 32) / wallW, (vh - 32) / wallH);
+}
+
+function minScale() {
+  return Math.max(fitScale(), 0.03); // smallest zoom = whole wall visible
+}
+
+// pan stops at the wall edges: no empty-space roaming. When the wall is
+// smaller than the viewport on an axis, it is centered and locked there.
+function clamp() {
+  var vw = stage.clientWidth, vh = stage.clientHeight;
+  var w = wallW * scale, h = wallH * scale;
+
+  if (w < vw - 1) { tx = Math.round((vw - w) / 2); }
+  else { tx = Math.min(0, Math.max(vw - w, tx)); }
+  if (h < vh - 1) { ty = Math.round((vh - h) / 2); }
+  else { ty = Math.min(0, Math.max(vh - h, ty)); }
+}
+
+function fit() {
+  scale = Math.min(fitScale(), MAX_SCALE);
+  if (scale < minScale()) scale = minScale();
+  tx = 0; ty = 0;
+  clamp();
+  setTransform();
+}
+
+function zoomAt(cx, cy, factor) {
+  var ns = scale * factor;
+  if (ns > MAX_SCALE) ns = MAX_SCALE;
+  if (ns < minScale()) ns = minScale(); // land exactly on the fit minimum
+  var wx = (cx - tx) / scale, wy = (cy - ty) / scale; // point under cursor in world
+  scale = ns;
+  tx = cx - wx * scale;
+  ty = cy - wy * scale;
+  clamp();
+  setTransform();
+}
+
+function toWorld(cx, cy) { return [(cx - tx) / scale, (cy - ty) / scale]; }
+
+/* ---------- culling: hide frames outside the viewport ---------- */
+var rafPending = false;
+function scheduleCull() {
+  if (rafPending) return;
+  rafPending = true;
+  requestAnimationFrame(function () {
+    rafPending = false;
+    var x0 = -tx / scale - 200, y0 = -ty / scale - 200;
+    var x1 = x0 + stage.clientWidth / scale + 400;
+    var y1 = y0 + stage.clientHeight / scale + 400;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      var off = it.x + it.w < x0 || it.x > x1 || it.y + it.h < y0 || it.y > y1;
+      if (off && !it.el.classList.contains('off')) it.el.classList.add('off');
+      else if (!off && it.el.classList.contains('off')) it.el.classList.remove('off');
+    }
+  });
+}
+
+/* ---------- drag to pan (pointer events, also pinch) ---------- */
+var pointers = {}; // pointerId -> {x,y}
+var dragStart = null;   // {sx,sy,tx,ty}
+var pinchStart = null;  // {dist, cx, cy, scale}
+var moved = false;
+
+stage.addEventListener('pointerdown', function (e) {
+  world.style.transition = ''; // key-move glide must not fight a drag
+  stage.setPointerCapture(e.pointerId);
+  pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+  var ids = Object.keys(pointers);
+  if (ids.length === 2) {
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    pinchStart = {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2,
+      scale: scale
+    };
+    dragStart = null;
+  } else {
+    dragStart = { sx: e.clientX, sy: e.clientY, tx: tx, ty: ty };
+  }
+  moved = false;
+});
+
+stage.addEventListener('pointermove', function (e) {
+  if (!pointers[e.pointerId]) return;
+  var p = pointers[e.pointerId];
+  var dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  if (Math.abs(e.clientX - (dragStart ? dragStart.sx : e.clientX)) > 3 ||
+      Math.abs(e.clientY - (dragStart ? dragStart.sy : e.clientY)) > 3) moved = true;
+
+  var ids = Object.keys(pointers);
+  if (ids.length === 2) {
+    if (!pinchStart) return;
+    var a = pointers[ids[0]], b = pointers[ids[1]];
+    var dist = Math.hypot(a.x - b.x, a.y - b.y);
+    if (dist < 8) return;
+    var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    var factor = dist / pinchStart.dist;
+    var ns = pinchStart.scale * factor;
+    if (ns > MAX_SCALE) ns = MAX_SCALE;
+    if (ns < minScale()) ns = minScale();
+    var wx = (pinchStart.cx - tx) / scale, wy = (pinchStart.cy - ty) / scale;
+    scale = ns;
+    tx = cx - wx * scale;
+    ty = cy - wy * scale;
+    clamp(); setTransform(); scheduleCull();
+    return;
+  }
+  if (dragStart && ids.length === 1) {
+    stage.classList.add('dragging');
+    tx = dragStart.tx + (e.clientX - dragStart.sx);
+    ty = dragStart.ty + (e.clientY - dragStart.sy);
+    clamp(); setTransform(); scheduleCull();
+  }
+});
+
+function endPointer(e) {
+  delete pointers[e.pointerId];
+  if (Object.keys(pointers).length === 0) {
+    dragStart = null; pinchStart = null;
+    stage.classList.remove('dragging');
+  }
+}
+stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointercancel', endPointer);
+
+/* ---------- double-tap / double-click zooms in ---------- */
+var lastTap = 0, tapX = 0, tapY = 0;
+stage.addEventListener('pointerup', function (e) {
+  if (moved) return;
+  var now = Date.now();
+  if (now - lastTap < 350 && Math.hypot(e.clientX - tapX, e.clientY - tapY) < 40) {
+    zoomAt(e.clientX, e.clientY, 2.2);
+    scheduleCull();
+    lastTap = 0;
+  } else {
+    lastTap = now; tapX = e.clientX; tapY = e.clientY;
+  }
+});
+
+/* ---------- wheel zoom (to cursor) ---------- */
+stage.addEventListener('wheel', function (e) {
+  e.preventDefault();
+  var f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.03 : 0.0016));
+  zoomAt(e.clientX, e.clientY, f);
+  scheduleCull();
+}, { passive: false });
+
+/* ---------- keyboard panning (arrow keys) ---------- */
+var keyT = null;
+function moveBy(dx, dy) {
+  tx += dx; ty += dy;
+  clamp();
+  world.style.transition = 'transform 0.18s ease'; // soft glide for key moves
+  setTransform();
+  clearTimeout(keyT);
+  keyT = setTimeout(function () { world.style.transition = ''; }, 220);
+}
+window.addEventListener('keydown', function (e) {
+  // + / = zoom in, - zoom out (around the viewport center)
+  if (e.key === '+' || e.key === '=' || e.key === '-') {
+    e.preventDefault();
+    var dir = (e.key === '-') ? (1 / 1.5) : 1.5;
+    zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, dir);
+    scheduleCull();
+    return;
+  }
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' &&
+      e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+  e.preventDefault();
+  var vw = stage.clientWidth, vh = stage.clientHeight;
+  // arrow = look in that direction: Right reveals content to the right, so
+  // the wall shifts left (negative tx), Down shifts up (negative ty)
+  var dx = e.key === 'ArrowRight' ? -Math.round(vw * 0.55) : e.key === 'ArrowLeft' ? Math.round(vw * 0.55) : 0;
+  var dy = e.key === 'ArrowDown' ? -Math.round(vh * 0.55) : e.key === 'ArrowUp' ? Math.round(vh * 0.55) : 0;
+  moveBy(dx, dy);
+  scheduleCull();
+});
+
+/* ---------- controls ---------- */
+var zoomIn = document.getElementById('zoomIn');
+var zoomOut = document.getElementById('zoomOut');
+var fitBtn = document.getElementById('fitBtn');
+zoomIn.addEventListener('click', function () {
+  zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, 1.5); scheduleCull();
+});
+zoomOut.addEventListener('click', function () {
+  zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, 1 / 1.5); scheduleCull();
+});
+fitBtn.addEventListener('click', function () { fit(); scheduleCull(); });
+
+window.addEventListener('resize', function () { fit(); scheduleCull(); });
+
+/* ---------- go ---------- */
+// open "in the gallery": about 1500 world px (~3 stacked photos) regardless
+// of wall size (fit button still zooms out to the whole wall)
+scale = Math.min(1, stage.clientHeight / OPEN_WORLD);
+if (scale < minScale()) scale = minScale();
+tx = 0; ty = 0;
+clamp(); setTransform(); scheduleCull();
+if (hint) setTimeout(function () { hint.classList.add('gone'); }, 7000);
+</script>
+</body>
+</html>

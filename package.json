@@ -1,0 +1,13 @@
+{
+  "name": "jpg-wall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "jpg.krisztian.wtf photo wall - static gallery generator",
+  "scripts": {
+    "build": "node gen.js",
+    "seed": "node scripts/seed-placeholders.js"
+  },
+  "dependencies": {
+    "sharp": "^0.35.4"
+  }
+}
