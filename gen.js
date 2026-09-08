@@ -324,7 +324,6 @@ const LAYOUT = {
   MAT: 20,         // white mat border around each photo (px, world)
   CAP_H: 72,       // caption zone under the photo (air + three 16px lines)
   CAP_GAP: 22,     // air between photo bottom and the caption text
-  OPEN_WORLD: 1500, // vertical world px shown on load (~2-3 stacked photos)
 };
 
 /**
@@ -482,6 +481,7 @@ function buildHtml(data) {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="A photo wall you can pan and zoom.">
+<script defer src="https://ramen.lostsignals.studio/script.js" data-website-id="f2bca9c3-b001-4e7a-9d5d-84cacfe31a54"></script>
 <title>JPG BY KRISZTIAN</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2326231e'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%23e23c30'/%3E%3C/svg%3E">
 <style>
@@ -650,7 +650,6 @@ ${empty ? '/* empty wall - nothing to render */' : `
 var POS = ${json};
 var MAX_SCALE = 5;
 // vertical world window shown on load, independent of wall size
-var OPEN_WORLD = ${LAYOUT.OPEN_WORLD};
 
 var stage = document.getElementById('stage');
 var world = document.getElementById('world');
@@ -907,11 +906,10 @@ fitBtn.addEventListener('click', function () { fit(); scheduleCull(); });
 window.addEventListener('resize', function () { fit(); scheduleCull(); });
 
 /* ---------- go ---------- */
-// open "in the gallery": about 1500 world px (~3 stacked photos) regardless
-// of wall size (fit button still zooms out to the whole wall)
-scale = Math.min(1, stage.clientHeight / OPEN_WORLD);
-if (scale < minScale()) scale = minScale();
-tx = 0; ty = 0;
+// open at 75% zoom, centered on the middle of the wall
+scale = 0.75;
+tx = Math.round((stage.clientWidth - wallW * scale) / 2);
+ty = Math.round((stage.clientHeight - wallH * scale) / 2);
 clamp(); setTransform(); scheduleCull();
 if (hint) setTimeout(function () { hint.classList.add('gone'); }, 7000);`}
 </script>

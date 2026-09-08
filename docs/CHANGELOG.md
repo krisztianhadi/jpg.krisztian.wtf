@@ -1,7 +1,9 @@
 # CHANGELOG - jpg.krisztian.wtf
 
 ## 2026-09-08
-- Flow: originals live in the local gitignored `photos/` folder - `node gen.js` optimizes them and the committed `dist/` is what gets deployed by CI (no more GitHub-side rebuild from originals). The repo stays small; only optimized images are pushed.
+- Feature: umami analytics script (website id f2bca9c3-b001-4e7a-9d5d-84cacfe31a54, ramen.lostsignals.studio) added to the page head.
+- Tweak: the wall now opens at 75% zoom centered on the middle of the wall instead of the top-left overview.
+ `photos/` folder - `node gen.js` optimizes them and the committed `dist/` is what gets deployed by CI (no more GitHub-side rebuild from originals). The repo stays small; only optimized images are pushed.
 - Feature: dark-grey favicon with a single red dot.
 - Tweak: frame titles show the file name verbatim in full caps with the extension; alt text cleaned to avoid duplicating the captions.
 - Feature: initial photo-wall scaffold. `gen.js` build (scan, dims + EXIF-orientation parsing, museum-hang row layout, self-contained index.html), `scripts/seed-placeholders.js`, 12 sample placeholders, `pages.yml` CI deploy workflow, docs suite.
