@@ -480,9 +480,10 @@ function buildHtml(data) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="description" content="A photo wall you can pan and zoom.">
-<script defer src="https://ramen.lostsignals.studio/script.js" data-website-id="f2bca9c3-b001-4e7a-9d5d-84cacfe31a54"></script>
-<title>JPG BY KRISZTIAN</title>
+<meta name="description" content="Various photos from the camera of Krisztian">
+<script defer src="https://ramen.lostsignals.studio/script.js" data-website-id="f2bca9c3-b001-4e7a-9d5d-84cacfe31a54" data-cache="true"
+        data-domains="jpg.krisztian.wtf"></script>
+<title>JPG BY K</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2326231e'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%23e23c30'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -590,6 +591,7 @@ function buildHtml(data) {
     opacity:1; transition:opacity 1.2s ease 6s;
   }
   #hint.gone { opacity:0; }
+  @media (pointer: coarse) { #hint { display:none; } } /* no manual on touch */
 
   #controls {
     position:fixed; right:14px; bottom:14px;
@@ -624,7 +626,7 @@ function buildHtml(data) {
 </div>
 
 <header>
-  <h1>JPG BY KRISZTIAN</h1>
+  <h1>JPG BY K</h1>
   <span class="count">${photos.length} photo${photos.length === 1 ? '' : 's'}</span>
 </header>
 
@@ -664,7 +666,7 @@ for (var i = 0; i < POS.length; i++) {
   var d = POS[i];
   var el = document.createElement('div');
   el.className = 'item';
-  el.style.transform = 'translate(' + d.x + 'px,' + d.y + 'px)';
+  el.style.transform = 'translate3d(' + d.x + 'px,' + d.y + 'px,0)';
 
   var frame = document.createElement('div');
   frame.className = 'frame';
@@ -703,7 +705,7 @@ var wallW = ${data.canvasW}, wallH = ${data.canvasH};
 var tx = 0, ty = 0, scale = 1;
 
 function setTransform() {
-  world.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+  world.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + scale + ')';
   if (zoomLbl) zoomLbl.textContent = Math.round(scale * 100) + '%';
 }
 
@@ -776,6 +778,8 @@ var pinch = null;      // {lastDist, midX, midY} - incremental pinch state
 var moved = false;
 
 stage.addEventListener('pointerdown', function (e) {
+  cancelGlide();                       // grabbing stops any inertia
+  lastMoveT = 0;
   world.style.transition = ''; // key-move glide must not fight a drag
   try { stage.setPointerCapture(e.pointerId); } catch (err) { /* synthetic/test events */ }
   pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -827,6 +831,16 @@ stage.addEventListener('pointermove', function (e) {
     stage.classList.add('dragging');
     tx = dragStart.tx + (e.clientX - dragStart.sx);
     ty = dragStart.ty + (e.clientY - dragStart.sy);
+    // velocity estimate (px/ms, exponential smoothing) for the glide
+    var now = performance.now();
+    if (lastMoveT) {
+      var dtm = Math.max(8, now - lastMoveT);
+      var ivx = (e.clientX - prevMoveX) / dtm;
+      var ivy = (e.clientY - prevMoveY) / dtm;
+      velX = velX * 0.65 + ivx * 0.35;
+      velY = velY * 0.65 + ivy * 0.35;
+    }
+    prevMoveX = e.clientX; prevMoveY = e.clientY; lastMoveT = now;
     clamp(); setTransform(); scheduleCull();
   }
 });
@@ -843,10 +857,41 @@ function endPointer(e) {
 stage.addEventListener('pointerup', endPointer);
 stage.addEventListener('pointercancel', endPointer);
 
+/* ---------- inertia: iOS-like glide after a flick ---------- */
+var glideRaf = 0, velX = 0, velY = 0, lastMoveT = 0, prevMoveX = 0, prevMoveY = 0;
+
+function cancelGlide() {
+  if (glideRaf) { cancelAnimationFrame(glideRaf); glideRaf = 0; }
+  velX = velY = 0; lastMoveT = 0;
+}
+
+function startGlide() {
+  if (glideRaf) { cancelAnimationFrame(glideRaf); glideRaf = 0; }
+  if (Math.abs(velX) < 0.03 && Math.abs(velY) < 0.03) return; // not a flick
+  var last = performance.now();
+  function step(now) {
+    var dt = Math.min(32, now - last);
+    last = now;
+    var damp = Math.pow(0.93, dt / 16);  // exponential friction
+    velX *= damp; velY *= damp;
+    var bx = tx, by = ty;
+    tx += velX * dt;
+    ty += velY * dt;
+    clamp();
+    if (Math.abs(tx - bx) < 0.05) velX = 0; // hit the wall edge on x
+    if (Math.abs(ty - by) < 0.05) velY = 0; // ...or on y
+    setTransform();
+    scheduleCull();
+    if (Math.abs(velX) < 0.02 && Math.abs(velY) < 0.02) { glideRaf = 0; return; }
+    glideRaf = requestAnimationFrame(step);
+  }
+  glideRaf = requestAnimationFrame(step);
+}
+
 /* ---------- double-tap / double-click zooms in ---------- */
 var lastTap = 0, tapX = 0, tapY = 0;
 stage.addEventListener('pointerup', function (e) {
-  if (moved) return;
+  if (moved) { startGlide(); moved = false; return; }
   var now = Date.now();
   if (now - lastTap < 350 && Math.hypot(e.clientX - tapX, e.clientY - tapY) < 40) {
     zoomAt(e.clientX, e.clientY, 2.2);
@@ -859,6 +904,7 @@ stage.addEventListener('pointerup', function (e) {
 
 /* ---------- wheel zoom (to cursor) ---------- */
 stage.addEventListener('wheel', function (e) {
+  cancelGlide();
   e.preventDefault();
   var f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.03 : 0.0016));
   zoomAt(e.clientX, e.clientY, f);
