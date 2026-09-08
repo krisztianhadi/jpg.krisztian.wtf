@@ -295,24 +295,20 @@ function scheduleCull() {
 /* ---------- drag to pan (pointer events, also pinch) ---------- */
 var pointers = {}; // pointerId -> {x,y}
 var dragStart = null;   // {sx,sy,tx,ty}
-var pinchStart = null;  // {dist, cx, cy, scale}
+var pinch = null;      // {lastDist, midX, midY} - incremental pinch state
 var moved = false;
 
 stage.addEventListener('pointerdown', function (e) {
   world.style.transition = ''; // key-move glide must not fight a drag
-  stage.setPointerCapture(e.pointerId);
+  try { stage.setPointerCapture(e.pointerId); } catch (err) { /* synthetic/test events */ }
   pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
   var ids = Object.keys(pointers);
   if (ids.length === 2) {
-    var a = pointers[ids[0]], b = pointers[ids[1]];
-    pinchStart = {
-      dist: Math.hypot(a.x - b.x, a.y - b.y),
-      cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2,
-      scale: scale
-    };
     dragStart = null;
+    pinch = null; // first two-finger move (re)initializes the pinch state
   } else {
     dragStart = { sx: e.clientX, sy: e.clientY, tx: tx, ty: ty };
+    pinch = null;
   }
   moved = false;
 });
@@ -327,23 +323,30 @@ stage.addEventListener('pointermove', function (e) {
 
   var ids = Object.keys(pointers);
   if (ids.length === 2) {
-    if (!pinchStart) return;
     var a = pointers[ids[0]], b = pointers[ids[1]];
     var dist = Math.hypot(a.x - b.x, a.y - b.y);
     if (dist < 8) return;
     var cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-    var factor = dist / pinchStart.dist;
-    var ns = pinchStart.scale * factor;
+    if (!pinch) {
+      pinch = { lastDist: dist, midX: cx, midY: cy };
+    }
+    // follow the fingers: first translate by the midpoint delta, then zoom
+    // anchored at the midpoint - no stale-anchor drift
+    tx += cx - pinch.midX;
+    ty += cy - pinch.midY;
+    var ns = scale * (dist / pinch.lastDist);
     if (ns > MAX_SCALE) ns = MAX_SCALE;
     if (ns < minScale()) ns = minScale();
-    var wx = (pinchStart.cx - tx) / scale, wy = (pinchStart.cy - ty) / scale;
+    var wx = (cx - tx) / scale, wy = (cy - ty) / scale;
     scale = ns;
     tx = cx - wx * scale;
     ty = cy - wy * scale;
+    pinch.lastDist = dist; pinch.midX = cx; pinch.midY = cy;
     clamp(); setTransform(); scheduleCull();
     return;
   }
-  if (dragStart && ids.length === 1) {
+  if (ids.length === 1) {
+    if (!dragStart) dragStart = { sx: e.clientX, sy: e.clientY, tx: tx, ty: ty };
     stage.classList.add('dragging');
     tx = dragStart.tx + (e.clientX - dragStart.sx);
     ty = dragStart.ty + (e.clientY - dragStart.sy);
@@ -353,8 +356,10 @@ stage.addEventListener('pointermove', function (e) {
 
 function endPointer(e) {
   delete pointers[e.pointerId];
-  if (Object.keys(pointers).length === 0) {
-    dragStart = null; pinchStart = null;
+  var n = Object.keys(pointers).length;
+  if (n < 2) pinch = null;      // pinch needs exactly two fingers
+  if (n === 0) {
+    dragStart = null;
     stage.classList.remove('dragging');
   }
 }
@@ -443,8 +448,10 @@ fitBtn.addEventListener('click', function () { fit(); scheduleCull(); });
 window.addEventListener('resize', function () { clamp(); setTransform(); scheduleCull(); });
 
 /* ---------- go ---------- */
-// open at 75% zoom, centered on the middle of the wall
-scale = 0.75;
+// open centered on the middle of the wall: 75% on desktop, 35% on
+// touch/phone viewports where the wall is huge relative to the screen
+var openScale = (matchMedia('(pointer: coarse)').matches || stage.clientWidth < 768) ? 0.35 : 0.75;
+scale = openScale;
 tx = Math.round((stage.clientWidth - wallW * scale) / 2);
 ty = Math.round((stage.clientHeight - wallH * scale) / 2);
 clamp(); setTransform(); scheduleCull();
