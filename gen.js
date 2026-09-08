@@ -478,7 +478,7 @@ function buildHtml(data) {
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="A photo wall you can pan and zoom.">
 <script defer src="https://ramen.lostsignals.studio/script.js" data-website-id="f2bca9c3-b001-4e7a-9d5d-84cacfe31a54"></script>
@@ -860,6 +860,18 @@ stage.addEventListener('wheel', function (e) {
   scheduleCull();
 }, { passive: false });
 
+/* ---------- native gesture suppression (iOS) ---------- */
+// the wall owns all touches: stop Safari's pinch-zoom, double-tap zoom and
+// rubber-band scrolling from fighting our pointer-event pan/zoom
+document.addEventListener('touchmove', function (e) {
+  if (e.target === stage || stage.contains(e.target)) e.preventDefault();
+}, { passive: false });
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (name) {
+  document.addEventListener(name, function (e) {
+    if (e.target === stage || stage.contains(e.target)) e.preventDefault();
+  });
+});
+
 /* ---------- keyboard panning (arrow keys) ---------- */
 var keyT = null;
 function moveBy(dx, dy) {
@@ -903,7 +915,9 @@ zoomOut.addEventListener('click', function () {
 });
 fitBtn.addEventListener('click', function () { fit(); scheduleCull(); });
 
-window.addEventListener('resize', function () { fit(); scheduleCull(); });
+// resizing (rotation, mobile toolbars) must not reset the user's zoom -
+// just keep the view inside the wall bounds
+window.addEventListener('resize', function () { clamp(); setTransform(); scheduleCull(); });
 
 /* ---------- go ---------- */
 // open at 75% zoom, centered on the middle of the wall
