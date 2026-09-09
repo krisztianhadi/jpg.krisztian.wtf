@@ -322,7 +322,7 @@ const LAYOUT = {
                    // AND between the two photos of a portrait pair
   PAD: 260,        // empty wall around the whole arrangement
   MAT: 20,         // white mat border around each photo (px, world)
-  CAP_H: 72,       // caption zone under the photo (air + three 16px lines)
+  CAP_H: 56,       // caption zone under the photo (air + two 16px lines)
   CAP_GAP: 22,     // air between photo bottom and the caption text
 };
 
@@ -471,7 +471,7 @@ function buildHtml(data) {
   const json = JSON.stringify(photos.map((p) => ({
     x: p.x, y: p.y, pw: p.pw, ph: p.ph,
     file: p.file, w: p.w, h: p.h, base: p.base,
-    title: p.title || '', spec: p.spec || '', cam: p.cam || '',
+    title: p.title || '', spec: p.spec || '', cam: p.cam || '', thumb: p.thumb || '',
   })));
 
   return `<!DOCTYPE html>
@@ -547,11 +547,26 @@ function buildHtml(data) {
     border-radius:2px;                  /* soft corners on the mat */
     box-shadow: 0 2px 3px rgba(0,0,0,.16), 0 9px 20px rgba(0,0,0,.20);
   }
-  .frame img {
-    display:block;
-    width:100%; height:auto;          /* keep exact aspect, never crop */
+  /* photo box: exact image rectangle, clips the placeholder so any blur
+     stays strictly inside the photo and never touches the mat */
+  .pbox {
+    position:relative;
+    overflow:hidden;
+    border-radius:2px;                  /* soft corners on the photo itself */
     background:#000;
-    border-radius:2px;                /* soft corners on the photo itself */
+  }
+  .pbox .pbg {
+    position:absolute; inset:0;
+    background-size:cover; background-position:center;
+    filter:blur(12px);
+    transform:scale(1.08);              /* hide the blurred edge rim */
+    transition:opacity .4s ease;
+  }
+  .pbox.loaded .pbg { opacity:0; }      /* fade out once the photo decodes */
+  .pbox img {
+    display:block;
+    width:100%; height:100%;            /* box ratio == photo aspect, exact */
+    border-radius:2px;
     -webkit-user-drag:none; user-drag:none;
   }
   .frame .cap {
@@ -676,16 +691,30 @@ for (var i = 0; i < POS.length; i++) {
   var img = document.createElement('img');
   img.src = 'photos/' + d.file;
   img.alt = d.base.replace(/-/g, ' '); // readable, not a copy of the frame text
-  img.width = d.w;
-  img.height = d.h;
+  img.width = d.pw;              // sane, layout-accurate numbers
+  img.height = d.ph;
   img.loading = 'lazy';
   img.decoding = 'async';
   img.draggable = false;
-  frame.appendChild(img);
+
+  // photo box: exact image rectangle; clips the blurred placeholder so the
+  // blur never bleeds past the photo onto the mat
+  var pbox = document.createElement('div');
+  pbox.className = 'pbox';
+  pbox.style.width = d.pw + 'px';
+  pbox.style.height = d.ph + 'px';
+  if (d.thumb) {
+    var pbg = document.createElement('div');
+    pbg.className = 'pbg';
+    pbg.style.backgroundImage = 'url("' + d.thumb + '")';
+    pbox.appendChild(pbg);
+  }
+  pbox.appendChild(img);
+  frame.appendChild(pbox);
 
   var cap = document.createElement('div');
   cap.className = 'cap';
-  var lines = [d.title, d.spec, d.cam];
+  var lines = [d.spec, d.cam]; // filename line hidden for now
   for (var k = 0; k < lines.length; k++) {
     var cl = document.createElement('div');
     cl.className = 'cap-line';
@@ -700,6 +729,15 @@ for (var i = 0; i < POS.length; i++) {
 }
 
 var wallW = ${data.canvasW}, wallH = ${data.canvasH};
+
+// mark a photo box as loaded the moment its image decodes (capturing phase
+// catches every load, even ones that slip past per-element listeners)
+document.addEventListener('load', function (e) {
+  var t = e.target;
+  if (t && t.tagName === 'IMG' && t.closest && t.closest('.pbox')) {
+    t.closest('.pbox').classList.add('loaded');
+  }
+}, true);
 
 // view state: screen = world * scale + (tx, ty)
 var tx = 0, ty = 0, scale = 1;
@@ -766,7 +804,14 @@ function scheduleCull() {
       var it = items[i];
       var off = it.x + it.w < x0 || it.x > x1 || it.y + it.h < y0 || it.y > y1;
       if (off && !it.el.classList.contains('off')) it.el.classList.add('off');
-      else if (!off && it.el.classList.contains('off')) it.el.classList.remove('off');
+      else if (!off) {
+        if (it.el.classList.contains('off')) it.el.classList.remove('off');
+        var pbi = it.el.querySelector('.pbox');
+        if (pbi && !pbi.classList.contains('loaded')) {
+          var imi = it.el.querySelector('img');
+          if (imi.complete && imi.naturalWidth > 0) pbi.classList.add('loaded');
+        }
+      }
     }
   });
 }
@@ -1007,7 +1052,7 @@ try { sharp = require('sharp'); } catch (err) { /* optional */ }
 async function writeOptimized(file, srcFull, destFull) {
   if (!sharp || path.extname(file).toLowerCase() === '.gif') {
     fs.copyFileSync(srcFull, destFull);
-    return { before: fs.statSync(srcFull).size, after: fs.statSync(destFull).size };
+    return { before: fs.statSync(srcFull).size, after: fs.statSync(destFull).size, thumb: '' };
   }
   const buf = fs.readFileSync(srcFull);
   const ext = path.extname(file).toLowerCase();
@@ -1036,7 +1081,32 @@ async function writeOptimized(file, srcFull, destFull) {
     return { before: buf.length, after: fs.statSync(destFull).size };
   }
   fs.writeFileSync(destFull, out);
-  return { before: buf.length, after: out.length };
+  // tiny placeholder (24px JPEG, base64) so frames show a blurred preview
+  // while the real image decodes - no extra requests, fully inline
+  let thumb = '';
+  try {
+    const t = await sharp(buf, { failOn: 'none' }).rotate()
+      .resize({ width: 24, height: 24, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 55 }).toBuffer();
+    thumb = 'data:image/jpeg;base64,' + t.toString('base64');
+  } catch (err) { /* placeholder optional */ }
+  return { before: buf.length, after: out.length, thumb };
+}
+
+/**
+ * Pick the column count whose canvas comes out closest to square for this
+ * set of photos (the wall grows in both directions as photos are added).
+ */
+function pickCols(photoList) {
+  let best = LAYOUT.COLS, bestScore = Infinity;
+  for (let c = 4; c <= 14; c++) {
+    LAYOUT.COLS = c;
+    const laid = layout(photoList);
+    const score = Math.abs(Math.log(laid.canvasW / laid.canvasH)); // 1:1 ideal
+    if (score < bestScore) { bestScore = score; best = c; }
+  }
+  LAYOUT.COLS = best;
+  return best;
 }
 
 async function main() {
@@ -1060,6 +1130,9 @@ async function main() {
     if (!size) { skipped.push(f + ' (dims unknown)'); continue; }
     const exif = readExif(buf, f);
     const cap = formatCaption(exif);
+    // year taken, when available - leads the exposure line
+    const yearMatch = exif && exif.date ? /^(\d{4})/.exec(exif.date) : null;
+    const year = yearMatch ? yearMatch[1] : '';
     const base = path.basename(f, path.extname(f)).replace(/-x$/i, '');
     const ext = path.extname(f).toLowerCase();
     photos.push({
@@ -1069,12 +1142,13 @@ async function main() {
       title: base.toUpperCase() + ext.toUpperCase(),
       w: size.w, h: size.h,
       cam: cap.line1,                        // camera (small credit, last line)
-      spec: cap.line2,                       // exposure specs (middle line)
+      spec: [year, cap.line2].filter(Boolean).join(' - '), // e.g. 2024 - 23mm f/2 1/250s ISO 160
     });
   }
 
+  const cols = pickCols(photos); // adaptive: keep the wall ~square
   const laid = layout(photos);
-  const html = buildHtml({ photos: laid.photos, canvasW: laid.canvasW, canvasH: laid.canvasH, cols: laid.cols });
+  console.log('columns: ' + cols + ' (auto-chosen for a square canvas)');
 
   // clean + rebuild dist
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
@@ -1085,10 +1159,22 @@ async function main() {
   for (const p of laid.photos) {
     const src = path.join(PHOTOS_DIR, p.file);
     const dest = path.join(OUT_DIR, 'photos', p.file);
-    const r = await writeOptimized(p.file, src, dest); // eslint-disable-line no-await-in-loop
+    let r;
+    try {
+      r = await writeOptimized(p.file, src, dest); // eslint-disable-line no-await-in-loop
+    } catch (err) {
+      // photos may be mid-copy/rename while building - skip gracefully
+      console.warn('skip ' + p.file + ': ' + err.message);
+      continue;
+    }
     origBytes += r.before;
     optBytes += r.after;
+    p.thumb = r.thumb;
   }
+  // HTML must be built after optimization so the tiny placeholders (thumbs)
+  // are embedded in the wall data
+  const html = buildHtml({ photos: laid.photos, canvasW: laid.canvasW, canvasH: laid.canvasH, cols: laid.cols });
+
   const mode = sharp ? 'optimized' : 'copied as-is (npm install for optimization)';
 
   // CNAME for GitHub Pages custom domain
