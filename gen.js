@@ -540,7 +540,7 @@ function buildHtml(data) {
   }
   #stage.dragging { cursor:grabbing; }
 
-  #world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+  #world { position:absolute; left:0; top:0; transform-origin:0 0; }
 
   #wall {
     position:relative;
@@ -550,7 +550,7 @@ function buildHtml(data) {
     background: transparent;
   }
 
-  .item { position:absolute; left:0; top:0; will-change:transform; }
+  .item { position:absolute; left:0; top:0; }
   .frame {
     background:var(--mat);
     padding:${LAYOUT.MAT}px;
@@ -675,7 +675,7 @@ ${empty ? '/* empty wall - nothing to render */' : `
    for image dimensions - every frame is placed instantly. */
 
 var POS = ${json};
-var MAX_SCALE = 5;
+var MAX_SCALE = 4;
 // vertical world window shown on load, independent of wall size
 
 var stage = document.getElementById('stage');
@@ -691,7 +691,7 @@ for (var i = 0; i < POS.length; i++) {
   var d = POS[i];
   var el = document.createElement('div');
   el.className = 'item';
-  el.style.transform = 'translate3d(' + d.x + 'px,' + d.y + 'px,0)';
+  el.style.transform = 'translate(' + d.x + 'px,' + d.y + 'px)';
 
   var frame = document.createElement('div');
   frame.className = 'frame';
@@ -753,7 +753,7 @@ document.addEventListener('load', function (e) {
 var tx = 0, ty = 0, scale = 1;
 
 function setTransform() {
-  world.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + scale + ')';
+  world.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
   if (zoomLbl) zoomLbl.textContent = Math.round(scale * 100) + '%';
 }
 
