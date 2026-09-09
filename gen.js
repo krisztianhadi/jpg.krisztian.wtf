@@ -320,6 +320,8 @@ const LAYOUT = {
   LONG: 600,       // display width of a landscape brick (world px)
   GAP: 64,         // uniform gutter: between columns, between stacked bricks,
                    // AND between the two photos of a portrait pair
+  HERO_RATE: 3,    // ~30% of unmarked portraits go big (hash % 10 < 3)
+  HERO_MIN_ASPECT: 0.6, // never hero-ify extreme 9:16-ish portraits
   PAD: 260,        // empty wall around the whole arrangement
   MAT: 20,         // white mat border around each photo (px, world)
   CAP_H: 56,       // caption zone under the photo (air + two 16px lines)
@@ -364,10 +366,13 @@ function layout(photos) {
   const lands = sized.filter((p) => p.aspect >= 1);
   const ports = sized.filter((p) => p.aspect < 1);
 
-  // a "-x" filename suffix (before the extension) marks the ONLY photos that
-  // display full size: always a single brick, never sharing a cell
+  // "-x" marked photos are always full-size singles; on top of that, ~30% of
+  // unmarked portraits (stable hash pick) become big too, for dynamics
   const marked = ports.filter((p) => p.marked);
-  const pairPorts = ports.filter((p) => !p.marked);
+  const plainPorts = ports.filter((p) => !p.marked);
+  const isHero = (p) => (p.h % 10) < LAYOUT.HERO_RATE && p.aspect >= LAYOUT.HERO_MIN_ASPECT;
+  const heroPorts = plainPorts.filter(isHero);
+  const pairPorts = plainPorts.filter((p) => !isHero(p));
 
   // pairs = two side-by-side portraits (in scrambled order); an odd leftover
   // portrait stays a single (wider) brick at its own position
@@ -384,7 +389,11 @@ function layout(photos) {
     p.ph = Math.max(1, Math.round(LONG / Math.max(p.aspect, 0.01)));
   }
   for (const p of marked) {
-    p.pw = LONG; // highlighted ("-x") portraits: the only full-size ones
+    p.pw = LONG; // "-x" marked: always full size
+    p.ph = Math.max(1, Math.round(LONG / Math.max(p.aspect, 0.01)));
+  }
+  for (const p of heroPorts) {
+    p.pw = LONG; // random ~30% unmarked hero portrait: big
     p.ph = Math.max(1, Math.round(LONG / Math.max(p.aspect, 0.01)));
   }
   for (const pair of pairList) {
@@ -403,6 +412,7 @@ function layout(photos) {
   // bricks in near-original photo order: singles and pairs interleaved by index
   const bricks = lands.map((p) => ({ firstIdx: p.idx, list: [p] }));
   for (const p of marked) bricks.push({ firstIdx: p.idx, list: [p] });
+  for (const p of heroPorts) bricks.push({ firstIdx: p.idx, list: [p] });
   for (const pair of pairList) bricks.push(pair);
   if (oddPortrait) bricks.push({ firstIdx: oddPortrait.idx, list: [oddPortrait] });
   bricks.sort((a, b) => a.firstIdx - b.firstIdx);
