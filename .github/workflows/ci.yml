@@ -1,0 +1,50 @@
+# Checks every push and pull request: the generator must build a wall from
+# scratch (with seeded fixtures, since real photos are not in the repo), the
+# test suite must pass, and the committed dist/ must still match the source
+# that produced it.
+#
+# Actions are pinned by commit SHA; the trailing comment is the human-readable
+# version (Dependabot keeps both up to date).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build a wall from seeded fixture photos
+        run: |
+          mkdir -p .ci/photos
+          node scripts/seed-placeholders.js .ci/photos
+          node gen.js --photos .ci/photos --out .ci/dist
+
+      - name: Check the fixture build
+        run: node scripts/check-build.js .ci/dist
+
+      - name: dist/ is in sync with the generator source
+        run: node scripts/check-stamp.js dist/index.html

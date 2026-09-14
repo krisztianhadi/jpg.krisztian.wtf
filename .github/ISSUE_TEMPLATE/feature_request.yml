@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a change to how the wall looks, builds or behaves
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What is awkward or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like
+      description: A rough idea is enough. Mention if it should be a config option.
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This belongs in the default behaviour
+        - label: This should be optional (config or flag)
+        - label: This is specific to my instance only

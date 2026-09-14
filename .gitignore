@@ -1,8 +1,21 @@
+# Hidden files are ignored by default (scratch work, local tokens, caches).
+# Anything that belongs in the repo has to be listed here explicitly - the
+# negation list is the allow-list, so a new dotfile cannot land by accident.
 .*
 !/.gitignore
+!/.gitattributes
+!/.editorconfig
+!/.nvmrc
 !/.github/
 !/.github/workflows/
+!/.github/workflows/ci.yml
 !/.github/workflows/pages.yml
+!/.github/ISSUE_TEMPLATE/
+!/.github/PULL_REQUEST_TEMPLATE.md
+!/.github/dependabot.yml
+
+# the build needs this one dotfile in the published output (GitHub Pages)
+!/dist/.nojekyll
 
 # original photos stay local - only the optimized dist/ site is committed
 /photos/
@@ -12,6 +25,12 @@
 /.git-credentials
 
 node_modules/
+
+# test + review scratch
+/.tmp-review/
+/.tmp-test/
+/.tmp-npm-cache/
+/.ci/
 
 # misc
 .DS_Store

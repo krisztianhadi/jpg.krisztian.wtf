@@ -1,0 +1,15 @@
+# Text files normalised in the repo, images left byte-exact.
+* text=auto eol=lf
+
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.pdf binary
+
+# Generated output: collapse it in diffs and reviews, but keep it committed
+# (the wall is published straight from dist/).
+dist/** linguist-generated=true
+dist/index.html -diff

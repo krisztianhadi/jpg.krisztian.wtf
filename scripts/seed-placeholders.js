@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 'use strict';
 /*
- * seed-placeholders.js - writes sample PNGs into photos/ so the wall has
- * something to show before real photos land.
+ * seed-placeholders.js - writes sample PNGs so a fresh clone has a wall to
+ * look at (and so the test suite has deterministic fixtures).
  *
- * Run:  node scripts/seed-placeholders.js
- * Idempotent: never overwrites an existing file. Delete the samples from
- * photos/ whenever you want them gone.
+ * Run:  node scripts/seed-placeholders.js [dir] [count]
+ *
+ * Idempotent: never overwrites an existing file. Delete the samples whenever
+ * you want them gone.
+ *
+ * The samples carry EXIF (camera, date, exposure) but never GPS, and each one
+ * is a PNG with an eXIf chunk, which also exercises metadata stripping.
  *
  * Zero dependencies: tiny PNG (RGB, 8-bit) encoder on Node zlib.
  */
@@ -14,9 +18,6 @@
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
-
-const OUT = path.join(__dirname, '..', 'photos');
-fs.mkdirSync(OUT, { recursive: true });
 
 /* ---------------- minimal PNG encoder ---------------- */
 
@@ -239,13 +240,29 @@ const SAMPLES = [
     { make: 'Canon', model: 'Canon EOS R6', date: '2024:12:25 14:02:40', fnum: [56, 10], shutter: [1, 640], iso: 320, focal: [100, 1] }],
 ];
 
-let written = 0;
-for (const [name, w, h, c1, c2, sun, exif] of SAMPLES) {
-  const file = path.join(OUT, 'sample-' + name + '.png');
-  if (fs.existsSync(file)) continue;
-  writePng(file, w, h, sample(c1, c2, sun), [exifChunk(exif)].filter(Boolean));
-  written++;
-  console.log('wrote ' + path.relative(path.join(__dirname, '..'), file));
+/**
+ * Write the sample PNGs into `dir` (created when missing).
+ * Returns the list of files written now (existing files are left alone).
+ */
+function writeSamples(dir, limit) {
+  fs.mkdirSync(dir, { recursive: true });
+  const files = [];
+  for (const [name, w, h, c1, c2, sun, exif] of SAMPLES.slice(0, limit || SAMPLES.length)) {
+    const file = path.join(dir, 'sample-' + name + '.png');
+    if (fs.existsSync(file)) continue;
+    writePng(file, w, h, sample(c1, c2, sun), [exifChunk(exif)].filter(Boolean));
+    files.push(file);
+  }
+  return files;
 }
-console.log(written + ' placeholder(s) written to photos/ - ' +
-  (written ? 'delete them anytime, real photos replace them.' : 'already present, nothing to do.'));
+
+module.exports = { writeSamples, SAMPLES, writePng, makeExifTiff, chunk };
+
+if (require.main === module) {
+  const dir = process.argv[2] ? path.resolve(process.argv[2]) : path.join(__dirname, '..', 'photos');
+  const limit = process.argv[3] ? Number(process.argv[3]) : 0;
+  const files = writeSamples(dir, limit);
+  for (const f of files) console.log('wrote ' + path.relative(process.cwd(), f));
+  console.log(files.length + ' placeholder(s) written to ' + dir + ' - ' +
+    (files.length ? 'delete them anytime, real photos replace them.' : 'already present, nothing to do.'));
+}

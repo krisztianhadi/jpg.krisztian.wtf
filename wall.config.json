@@ -1,0 +1,21 @@
+{
+  "title": "JPG BY K",
+  "description": "Various photos from the camera of Krisztian",
+  "lang": "en",
+  "themeColor": "#26231e",
+  "analytics": {
+    "script": "https://ramen.lostsignals.studio/script.js",
+    "websiteId": "f2bca9c3-b001-4e7a-9d5d-84cacfe31a54",
+    "domains": "jpg.krisztian.wtf",
+    "cache": true
+  },
+  "captions": {
+    "maxLines": 2,
+    "showYear": true,
+    "showCamera": true,
+    "showSpecs": true
+  },
+  "og": {
+    "photo": ""
+  }
+}

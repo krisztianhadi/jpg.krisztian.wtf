@@ -1,0 +1,44 @@
+{
+  "title": "Photo Wall",
+  "description": "A wall of photographs.",
+  "lang": "en",
+  "themeColor": "#26231e",
+  "siteUrl": "https://photos.example.com/",
+  "favicon": { "bg": "#26231e", "dot": "#e23c30" },
+  "og": { "photo": "" },
+  "photosDir": "photos",
+  "outDir": "dist",
+  "analytics": null,
+  "captions": {
+    "file": "captions.json",
+    "maxLines": 2,
+    "showFilename": false,
+    "showYear": true,
+    "showCamera": true,
+    "showSpecs": true
+  },
+  "layout": {
+    "cols": 0,
+    "long": 600,
+    "gap": 64,
+    "mat": 20,
+    "pad": 260,
+    "capGap": 22,
+    "heroRate": 3,
+    "heroMinAspect": 0.6,
+    "markSuffix": "-x",
+    "maxCols": 14
+  },
+  "images": {
+    "maxEdge": 2048,
+    "quality": 82,
+    "smallEdge": 256,
+    "thumbEdge": 24,
+    "thumbQuality": 55,
+    "ogWidth": 1200,
+    "ogHeight": 630,
+    "ogQuality": 82
+  },
+  "zoom": { "max": 0, "openDesktop": 0.75, "openTouch": 0.35 },
+  "noscript": { "limit": 60 }
+}

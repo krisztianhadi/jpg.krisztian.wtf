@@ -1,11 +1,40 @@
 {
-  "name": "jpg-wall",
-  "version": "1.0.0",
+  "name": "keret",
+  "version": "0.1.0",
   "private": true,
-  "description": "jpg.krisztian.wtf photo wall - static gallery generator",
+  "description": "Keret - a self-hosted photo wall: a pan-and-zoom wall of photographs built from a folder of images into a static site.",
+  "license": "AGPL-3.0-or-later",
+  "author": "Krisztian Hadi",
+  "homepage": "https://jpg.krisztian.wtf/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krisztianhadi/jpg.krisztian.wtf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/krisztianhadi/jpg.krisztian.wtf/issues"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "bin": {
+    "keret": "gen.js"
+  },
+  "files": [
+    "gen.js",
+    "src/",
+    "scripts/",
+    "docs/",
+    "wall.config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "node gen.js",
-    "seed": "node scripts/seed-placeholders.js"
+    "check": "node gen.js --check",
+    "serve": "node scripts/serve.js dist 3100",
+    "seed": "node scripts/seed-placeholders.js",
+    "stamp": "node scripts/check-stamp.js dist/index.html",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "sharp": "^0.35.4"
