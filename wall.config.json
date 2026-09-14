@@ -16,6 +16,7 @@
     "showSpecs": true
   },
   "og": {
+    "source": "assets/og.jpg",
     "photo": ""
   }
 }

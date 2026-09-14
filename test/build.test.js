@@ -50,6 +50,22 @@ test('a full build publishes the page and the furniture', async () => {
   assert.match(fs.readFileSync(path.join(fx.outDir, 'robots.txt'), 'utf8'), /Sitemap: https:\/\/example\.test\/sitemap\.xml/);
 });
 
+test('a committed social card is used as it is, and generated only when absent', async () => {
+  const fx = fixture(2);
+  // fixture() points og.source at assets/og.jpg, which the fixture directory has not got
+  const cfg = JSON.parse(fs.readFileSync(fx.configPath, 'utf8'));
+  assert.equal(cfg.og ? cfg.og.source : undefined, undefined, 'the fixture starts without a card');
+
+  const card = Buffer.from('pretend this is a designed 1200x630 jpeg');
+  const cardPath = path.join(fx.dir, 'card.jpg');
+  fs.writeFileSync(cardPath, card);
+  cfg.og = { source: cardPath, photo: '' };
+  fs.writeFileSync(fx.configPath, JSON.stringify(cfg));
+
+  await main(args(fx));
+  assert.deepEqual(fs.readFileSync(path.join(fx.outDir, 'og.jpg')), card, 'the card is copied, not regenerated');
+});
+
 test('the build is deterministic: a rebuild is byte-identical', async () => {
   const fx = fixture(3);
   await main(args(fx));

@@ -58,6 +58,13 @@ Notes:
   Cmd/Ctrl-click, middle-click or Enter on a focused frame opens the full-size
   file instead. The "fit the whole wall" button (or Home) zooms back out.
 - Dark mode is automatic; the wall follows the OS/browser preference.
+- The share card (`dist/og.jpg`) is the designed file at `assets/og.jpg`, copied
+  as-is. Replace that file to change it; delete it (or set `og.source` to `""`)
+  and the build generates one from a photo instead. The card is rendered by the
+  scripts in `.tmp-review/og/` (wall screenshot at 30% in dark mode, darkened,
+  white frame with the wordmark).
+- Colour, framing and padding of the card come from those scripts, not from the
+  config: they are one-off brand assets, not part of the build.
 - Every published photo is re-encoded: longest side capped at `images.maxEdge`
   (2048 px), JPEG q`images.quality` (82), metadata stripped, EXIF rotation baked
   in, plus a 24px inline placeholder per photo. The originals in

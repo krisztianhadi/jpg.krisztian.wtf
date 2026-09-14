@@ -47,6 +47,7 @@ Unknown keys, wrong types and out-of-range values fail the build.
 | `lang` | `en` | `<html lang>` |
 | `siteUrl` | `''` | absolute site URL; enables canonical/og/sitemap. Defaults to `https://<CNAME>/` when a CNAME file exists |
 | `themeColor` | `#26231e` | `theme-color` meta |
+| `og.source` | `assets/og.jpg` | a ready-made 1200x630 social card, relative to the project root; copied as-is when it exists |
 | `og.photo` | `''` | filename used for `og.jpg`; default is the widest landscape on the wall |
 | `photosDir` / `outDir` | `photos` / `dist` | paths, relative to the project root |
 | `captions.maxLines` | `2` | caption lines the engine draws (0-2) |
@@ -72,7 +73,7 @@ Unknown keys, wrong types and out-of-range values fail the build.
 
 Environment overrides (only these are read): `WALL_CONFIG`, `WALL_TITLE`,
 `WALL_DESCRIPTION`, `WALL_LANG`, `WALL_SITE_URL`, `WALL_THEME_COLOR`,
-`WALL_OG_PHOTO`, `WALL_PHOTOS_DIR`, `WALL_OUT_DIR`, `WALL_ANALYTICS_SCRIPT`,
+`WALL_OG_PHOTO`, `WALL_OG_SOURCE`, `WALL_PHOTOS_DIR`, `WALL_OUT_DIR`, `WALL_ANALYTICS_SCRIPT`,
 `WALL_ANALYTICS_ID`, `WALL_ANALYTICS_DOMAINS`, `WALL_MAX_EDGE`, `WALL_QUALITY`,
 `WALL_SMALL_EDGE`, `WALL_MID_EDGE`, `WALL_COLS`, `WALL_HERO_RATE`, `WALL_CAPTION_LINES`,
 `WALL_SHOW_FILENAME`, `WALL_SHOW_YEAR`, `WALL_SHOW_CAMERA`, `WALL_SHOW_SPECS`,

@@ -262,15 +262,25 @@ async function main(argv) {
   fs.writeFileSync(path.join(outDir, '.nojekyll'), '');
 
   /* social preview + icon + crawler files */
-  const ogFile = config.og.photo && fs.existsSync(path.join(photosDir, config.og.photo))
-    ? config.og.photo
-    : ogCandidate(published);
   let ogBytes = 0;
-  if (ogFile) {
-    try {
-      ogBytes = await images.writeOgImage(ogFile, path.join(photosDir, ogFile), path.join(outDir, 'og.jpg'), config);
-    } catch (err) {
-      console.warn('warning: could not build og.jpg from ' + ogFile + ': ' + err.message);
+  let ogFrom = '';
+  const ogCard = config.og.source ? path.resolve(ROOT, config.og.source) : '';
+  if (ogCard && fs.existsSync(ogCard)) {
+    // a designed card committed with the site: use it as it is
+    fs.copyFileSync(ogCard, path.join(outDir, 'og.jpg'));
+    ogBytes = fs.statSync(path.join(outDir, 'og.jpg')).size;
+    ogFrom = config.og.source;
+  } else {
+    const ogFile = config.og.photo && fs.existsSync(path.join(photosDir, config.og.photo))
+      ? config.og.photo
+      : ogCandidate(published);
+    if (ogFile) {
+      try {
+        ogBytes = await images.writeOgImage(ogFile, path.join(photosDir, ogFile), path.join(outDir, 'og.jpg'), config);
+        ogFrom = 'generated from ' + ogFile;
+      } catch (err) {
+        console.warn('warning: could not build og.jpg from ' + ogFile + ': ' + err.message);
+      }
     }
   }
   try {
@@ -295,7 +305,7 @@ async function main(argv) {
   console.log('wall: ' + published.length + ' photos, ' + path.join(outDir, 'index.html'));
   console.log('images: ' + mb(origBytes) + ' MB original -> ' + mb(servedBytes) + ' MB served'
     + (origBytes > servedBytes ? ', saved ' + mb(origBytes - servedBytes) + ' MB' : ''));
-  if (ogBytes) console.log('og.jpg: ' + mb(ogBytes) + ' MB from ' + ogFile);
+  if (ogBytes) console.log('og.jpg: ' + mb(ogBytes) + ' MB - ' + ogFrom);
   if (config.analytics) console.log('analytics: ' + config.analytics.script);
   else console.log('analytics: off');
   if (skipped.length) {

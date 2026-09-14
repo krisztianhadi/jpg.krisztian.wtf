@@ -17,7 +17,14 @@ const DEFAULTS = {
   lang: 'en',
   siteUrl: '',            // absolute site URL, e.g. https://photos.example.com/
   themeColor: '#26231e',
-  og: { photo: '' },      // filename used for the social preview image ('' = first photo)
+  og: {
+    // A ready-made 1200x630 social card, relative to the project root. When the
+    // file exists it is copied as-is (that is how this repository ships its own
+    // card); when it is missing the build generates one from a photo instead, so
+    // a fresh clone still gets a share image.
+    source: 'assets/og.jpg',
+    photo: '',            // filename used when generating: '' = widest landscape on the wall
+  },
 
   // paths
   photosDir: 'photos',
@@ -75,6 +82,7 @@ const ENV_MAP = {
   WALL_SITE_URL: 'siteUrl',
   WALL_THEME_COLOR: 'themeColor',
   WALL_OG_PHOTO: 'og.photo',
+  WALL_OG_SOURCE: 'og.source',
   WALL_PHOTOS_DIR: 'photosDir',
   WALL_OUT_DIR: 'outDir',
   WALL_ANALYTICS_SCRIPT: 'analytics.script',
@@ -172,6 +180,9 @@ function validate(config, root) {
   num(config.noscript.limit, 'noscript.limit', 0, 10000);
   for (const key of ['title', 'description', 'lang', 'siteUrl', 'photosDir', 'outDir']) {
     if (typeof config[key] !== 'string') throw new Error(key + ' must be a string');
+  }
+  for (const key of ['source', 'photo']) {
+    if (typeof config.og[key] !== 'string') throw new Error('og.' + key + ' must be a string');
   }
   if (config.analytics) {
     if (typeof config.analytics !== 'object') throw new Error('analytics must be an object or null');

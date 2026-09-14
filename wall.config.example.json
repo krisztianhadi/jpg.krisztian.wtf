@@ -5,7 +5,7 @@
   "themeColor": "#26231e",
   "siteUrl": "https://photos.example.com/",
   "favicon": { "bg": "#26231e", "dot": "#e23c30" },
-  "og": { "photo": "" },
+  "og": { "source": "assets/og.jpg", "photo": "" },
   "photosDir": "photos",
   "outDir": "dist",
   "analytics": null,

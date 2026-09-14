@@ -57,7 +57,9 @@ wall.config.json            instance configuration
 8. **Lay out** (world coordinates, 1 world px = 1 CSS px at scale 1): see below.
 9. **Render** one self-contained `out/index.html` from the asset templates (the
    verified CSS and engine, with the wall data and the instance metadata filled
-   in), plus `og.jpg`, `apple-touch-icon.png`, `robots.txt`, `sitemap.xml` (when
+   in), plus `og.jpg` (copied from `og.source` when that file exists - this
+   repository ships a designed card at `assets/og.jpg` - otherwise generated from
+   a photo), `apple-touch-icon.png`, `robots.txt`, `sitemap.xml` (when
    a site URL is known), `CNAME`, `.nojekyll` and a build stamp comment
    recording the hash of the generator source that produced it.
 10. **Report** - photo count, canvas size, bytes saved, which
