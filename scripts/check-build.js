@@ -49,10 +49,14 @@ if (!match) {
   notes.push(pos.length + ' photos on the wall');
 
   const boxes = [];
+  let captioned = 0;
   for (const row of pos) {
     const full = path.join(dir, 'photos', row.file);
     if (!fs.existsSync(full) || fs.statSync(full).size === 0) fail('missing photo: ' + row.file);
-    if (!row.spec && !row.cam) fail('no caption data for ' + row.file);
+    // caption *keys* must be there (the engine reads them); whether a photo has
+    // any caption is the photographer's EXIF, not something to fail a build over
+    if (!('spec' in row) || !('cam' in row)) fail('caption keys missing for ' + row.file);
+    if (row.spec || row.cam) captioned++;
     boxes.push({ f: row.file, x: row.x, y: row.y, w: row.pw + 2 * config.layout.mat, h: row.ph + capH + 2 * config.layout.mat });
   }
 
@@ -64,6 +68,8 @@ if (!match) {
       }
     }
   }
+
+  notes.push(captioned + ' of ' + pos.length + ' photos carry caption data');
 
   const canvas = /#wall \{\n\s*position:relative;\n\s*width:(\d+)px; height:(\d+)px;/.exec(html);
   if (!canvas) {
